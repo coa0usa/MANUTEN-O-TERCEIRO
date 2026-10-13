@@ -1283,10 +1283,15 @@
                         localStorage.setItem(chave, JSON.stringify(remoto.data().valor));
                     } else {
                         const local = localStorage.getItem(chave);
-                        if (local) await documento.set({ valor: JSON.parse(local), atualizadoEm: Date.now() });
+                        let valorInicial = [];
+                        if (local) {
+                            try { valorInicial = JSON.parse(local); } catch (_) { valorInicial = []; }
+                        }
+                        await documento.set({ valor: valorInicial, atualizadoEm: Date.now() });
                     }
                 } catch (erro) {
                     console.error(`Falha ao carregar ${chave} do Firestore:`, erro);
+                    showToast('Falha ao conectar ao Firestore. Confira as regras e o console.', 'warning');
                 }
             }));
         }
