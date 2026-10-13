@@ -1244,14 +1244,95 @@
 
     </main>
 
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA2kd6mau3qNraAxYA8DYZOptuni64SaWs",
+            authDomain: "controle-manutencao-terceiro.firebaseapp.com",
+            projectId: "controle-manutencao-terceiro",
+            storageBucket: "controle-manutencao-terceiro.firebasestorage.app",
+            messagingSenderId: "1035242280215",
+            appId: "1:1035242280215:web:b03e2e8472e2191ede1352",
+            measurementId: "G-22LMBTVXJ9"
+        };
+        const chavesFirebase = [
+            'cadastro_veiculos_manutencao', 'cadastro_colaboradores',
+            'cadastro_manutencao_seguranca', 'cadastro_historico_manutencao'
+        ];
+        let bancoFirebase = null;
+        let recebendoFirebase = false;
+        const temporizadoresFirebase = {};
+
+        try {
+            const appFirebase = firebase.initializeApp(firebaseConfig);
+            bancoFirebase = firebase.firestore();
+            if (firebase.analytics && location.protocol !== 'file:') firebase.analytics(appFirebase);
+        } catch (erro) {
+            console.error('Firebase indisponível:', erro);
+        }
+
+        async function carregarDadosFirebase() {
+            if (!bancoFirebase) return;
+            await Promise.all(chavesFirebase.map(async chave => {
+                const documento = bancoFirebase.collection('dados_aplicacao').doc(chave);
+                try {
+                    const remoto = await documento.get();
+                    if (remoto.exists && Array.isArray(remoto.data().valor)) {
+                        localStorage.setItem(chave, JSON.stringify(remoto.data().valor));
+                    } else {
+                        const local = localStorage.getItem(chave);
+                        if (local) await documento.set({ valor: JSON.parse(local), atualizadoEm: Date.now() });
+                    }
+                } catch (erro) {
+                    console.error(`Falha ao carregar ${chave} do Firestore:`, erro);
+                }
+            }));
+        }
+
+        function iniciarSincronizacaoFirebase() {
+            if (!bancoFirebase) return;
+            const setItemLocal = Storage.prototype.setItem;
+            Storage.prototype.setItem = function(chave, valor) {
+                setItemLocal.call(this, chave, valor);
+                if (this !== localStorage || recebendoFirebase || !chavesFirebase.includes(chave)) return;
+                clearTimeout(temporizadoresFirebase[chave]);
+                temporizadoresFirebase[chave] = setTimeout(async () => {
+                    try {
+                        await bancoFirebase.collection('dados_aplicacao').doc(chave)
+                            .set({ valor: JSON.parse(valor), atualizadoEm: Date.now() });
+                    } catch (erro) {
+                        console.error(`Falha ao salvar ${chave} no Firestore:`, erro);
+                        showToast('Não foi possível sincronizar com a nuvem.', 'warning');
+                    }
+                }, 600);
+            };
+
+            chavesFirebase.forEach(chave => {
+                bancoFirebase.collection('dados_aplicacao').doc(chave).onSnapshot(snapshot => {
+                    if (!snapshot.exists || !Array.isArray(snapshot.data().valor)) return;
+                    const remoto = JSON.stringify(snapshot.data().valor);
+                    if (localStorage.getItem(chave) === remoto) return;
+                    recebendoFirebase = true;
+                    localStorage.setItem(chave, remoto);
+                    recebendoFirebase = false;
+                    if (chave === 'cadastro_veiculos_manutencao') carregarEquipamentos();
+                    if (chave === 'cadastro_colaboradores') carregarColaboradores();
+                    if (chave === 'cadastro_manutencao_seguranca') carregarManutencao();
+                }, erro => console.error(`Erro na sincronização de ${chave}:`, erro));
+            });
+        }
+
         /* ===================================================
            INIT
         =================================================== */
-        window.onload = () => {
+        window.onload = async () => {
+            await carregarDadosFirebase();
             carregarEquipamentos();
             carregarColaboradores();
             carregarManutencao();
+            iniciarSincronizacaoFirebase();
         };
 
         /* ===================================================
