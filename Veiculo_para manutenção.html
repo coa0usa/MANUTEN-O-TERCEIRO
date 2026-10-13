@@ -844,6 +844,36 @@
             display: block;
         }
 
+        .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow); }
+        .chart-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+        .chart-summary { display: flex; flex-wrap: wrap; gap: 10px 24px; color: var(--text-muted); font-size: 0.9rem; margin-top: 14px; }
+        .chart-summary strong { color: var(--text-main); }
+        .week-list { display: grid; gap: 10px; }
+        .week-row { display: grid; grid-template-columns: 190px minmax(0, 1fr) 78px; align-items: center; gap: 16px; padding: 13px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+        .week-period strong { display: block; color: var(--text-main); font-size: .9rem; }
+        .week-period small { display: block; margin-top: 5px; color: var(--text-muted); font-size: .72rem; }
+        .week-bars { display: grid; gap: 8px; }
+        .week-bar-line { display: grid; grid-template-columns: 82px minmax(30px, 1fr) 24px; align-items: center; gap: 9px; font-size: .75rem; font-weight: 700; color: #475569; }
+        .week-track { height: 11px; background: #edf2f0; border-radius: 99px; overflow: hidden; }
+        .week-fill { height: 100%; min-width: 0; border-radius: inherit; transition: width .25s ease; }
+        .week-fill.programado { background: #79a995; }
+        .week-fill.realizado { background: #176b55; }
+        .week-count { text-align: right; color: #1e293b; }
+        .week-rate { min-width: 70px; padding: 9px 8px; text-align: center; border-radius: 99px; border: 1px solid #cbd5e1; font-weight: 800; font-size: .8rem; }
+        .week-rate.good { background: #e5f4eb; color: #176b55; border-color: #c5dfd2; }
+        .week-rate.mid { background: #fff7df; color: #946200; border-color: #f0d88e; }
+        .week-rate.low { background: #fff0ed; color: #b43e2d; border-color: #f2cbc4; }
+        .week-legend { display: flex; justify-content: flex-end; gap: 18px; color: var(--text-muted); font-size: .8rem; margin: 0 2px 12px; }
+        .week-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .week-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+        @media (max-width: 700px) {
+            .chart-card { padding: 14px; }
+            .chart-toolbar { align-items: flex-start; flex-direction: column; }
+            .week-row { grid-template-columns: 1fr auto; gap: 10px; }
+            .week-bars { grid-column: 1 / -1; grid-row: 2; }
+            .week-rate { grid-column: 2; grid-row: 1; }
+        }
+
         /* Toast */
         .toast {
             position: fixed;
@@ -997,6 +1027,9 @@
             <i class="fas fa-tools"></i> Manutenção
         </button>
 
+        <button class="nav-link" onclick="showSection('graficoMensal', this)">
+            <i class="fas fa-chart-column"></i> Comparativo semanal
+        </button>
         <div class="sidebar-footer">
             <button class="btn-bk" onclick="exportarBackup()">
                 <i class="fas fa-download"></i> Backup JSON
@@ -1242,6 +1275,29 @@
             </div>
         </div>
 
+        <div id="section-graficoMensal" class="section-content">
+            <div class="page-header">
+                <h1><button class="btn-menu-toggle" onclick="toggleSidebar()" title="Menu"><i class="fas fa-bars"></i></button><i class="fas fa-chart-column"></i>Comparativo semanal</h1>
+                <p>Cada linha representa uma semana operacional, de quinta a quarta, comparando ordens programadas e realizadas.</p>
+            </div>
+            <div class="chart-card">
+                <div class="chart-toolbar">
+                    <strong>Ordens por semana</strong>
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <label for="filtroMesGrafico">MÃªs:
+                            <select class="f-sel" id="filtroMesGrafico" onchange="atualizarGraficoMensal()"></select>
+                        </label>
+                        <label for="filtroAnoGrafico">Ano:
+                            <select class="f-sel" id="filtroAnoGrafico" onchange="atualizarGraficoMensal()"></select>
+                        </label>
+                    </div>
+                </div>
+                <div class="week-legend"><span><i style="background:#79a995"></i>Programado</span><span><i style="background:#176b55"></i>Realizado</span></div>
+                <div class="week-list" id="listaSemanasGrafico"></div>
+                <div class="chart-summary" id="resumoGraficoMensal"></div>
+            </div>
+        </div>
+
     </main>
 
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1348,6 +1404,7 @@
             document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
             document.getElementById('section-' + id).classList.add('active');
             btn.classList.add('active');
+            if (id === 'graficoMensal') atualizarGraficoMensal();
             // No mobile, fecha sidebar ao navegar
             if (window.innerWidth <= 900) {
                 document.getElementById('sidebar').classList.remove('open');
@@ -1816,6 +1873,7 @@
             });
             localStorage.setItem('cadastro_manutencao_seguranca', JSON.stringify(lista));
             atualizarKpisManut(lista, atraso);
+            if (document.getElementById('section-graficoMensal').classList.contains('active')) atualizarGraficoMensal();
         }
 
         function carregarManutencao() {
@@ -1824,6 +1882,68 @@
             if (dados.length > 0) dados.forEach(d => adicionarManutencao(d));
             else adicionarManutencao();
             atualizarKpisManut(dados);
+            if (document.getElementById('section-graficoMensal').classList.contains('active')) atualizarGraficoMensal();
+        }
+
+        // Comparativo semanal em semanas operacionais de quinta a quarta.
+        function atualizarGraficoMensal() {
+            const seletorMes = document.getElementById('filtroMesGrafico');
+            const seletorAno = document.getElementById('filtroAnoGrafico');
+            const lista = document.getElementById('listaSemanasGrafico');
+            if (!seletorMes || !seletorAno || !lista) return;
+            const ordens = JSON.parse(localStorage.getItem('cadastro_manutencao_seguranca') || '[]');
+            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            const anos = new Set();
+            ordens.forEach(o => [o.dataProg, o.retorno].forEach(data => {
+                const m = /^([0-9]{4})-[0-9]{2}-[0-9]{2}$/.exec(data || '');
+                if (m) anos.add(Number(m[1]));
+            }));
+            const agora = new Date();
+            if (!anos.size) anos.add(agora.getFullYear());
+            const anoAnterior = Number(seletorAno.value);
+            const listaAnos = [...anos].sort((a, b) => b - a);
+            seletorAno.innerHTML = listaAnos.map(ano => `<option value="${ano}">${ano}</option>`).join('');
+            seletorAno.value = listaAnos.includes(anoAnterior) ? String(anoAnterior) : String(listaAnos[0]);
+            if (!seletorMes.options.length) {
+                seletorMes.innerHTML = meses.map((mes, i) => `<option value="${i}">${mes}</option>`).join('');
+                seletorMes.value = String(agora.getMonth());
+            }
+            const mes = Number(seletorMes.value), ano = Number(seletorAno.value);
+            const inicioMes = new Date(ano, mes, 1), fimMes = new Date(ano, mes + 1, 0);
+            const inicioSemana = new Date(inicioMes);
+            inicioSemana.setDate(inicioSemana.getDate() - ((inicioMes.getDay() + 3) % 7));
+            const lerData = texto => {
+                const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(texto || '');
+                return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+            };
+            const formatarData = data => data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const noMes = data => data && data.getFullYear() === ano && data.getMonth() === mes;
+            const numeroSemana = data => {
+                const utc = new Date(Date.UTC(data.getFullYear(), data.getMonth(), data.getDate()));
+                utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7));
+                const inicioAno = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+                return Math.ceil((((utc - inicioAno) / 86400000) + 1) / 7);
+            };
+            const semanas = [];
+            for (let inicio = new Date(inicioSemana); inicio <= fimMes; inicio.setDate(inicio.getDate() + 7)) {
+                const fim = new Date(inicio); fim.setDate(fim.getDate() + 6);
+                const programado = ordens.filter(o => { const d = lerData(o.dataProg); return noMes(d) && d >= inicio && d <= fim; }).length;
+                const realizado = ordens.filter(o => { const d = lerData(o.retorno); return noMes(d) && d >= inicio && d <= fim; }).length;
+                semanas.push({ inicio: new Date(inicio), fim, programado, realizado });
+            }
+            const maior = Math.max(1, ...semanas.flatMap(s => [s.programado, s.realizado]));
+            lista.innerHTML = semanas.map(s => {
+                const larguraProg = s.programado ? Math.max(4, s.programado / maior * 100) : 0;
+                const larguraReal = s.realizado ? Math.max(4, s.realizado / maior * 100) : 0;
+                const aderencia = s.programado ? Math.round(s.realizado / s.programado * 100) : null;
+                const classe = aderencia === null ? '' : aderencia >= 100 ? 'good' : aderencia >= 50 ? 'mid' : 'low';
+                return `<article class="week-row"><div class="week-period"><strong>${formatarData(s.inicio)} a ${formatarData(s.fim)}</strong><small>Semana ${numeroSemana(s.inicio)} • quinta a quarta</small></div><div class="week-bars"><div class="week-bar-line"><span>Programado</span><div class="week-track"><div class="week-fill programado" style="width:${larguraProg}%"></div></div><span class="week-count">${s.programado}</span></div><div class="week-bar-line"><span>Realizado</span><div class="week-track"><div class="week-fill realizado" style="width:${larguraReal}%"></div></div><span class="week-count">${s.realizado}</span></div></div><div class="week-rate ${classe}">${aderencia === null ? '—' : `${aderencia}%`}</div></article>`;
+            }).join('');
+            const totalProg = semanas.reduce((n, s) => n + s.programado, 0);
+            const totalReal = semanas.reduce((n, s) => n + s.realizado, 0);
+            const aderenciaMes = totalProg ? Math.round(totalReal / totalProg * 100) : 0;
+            const melhor = semanas.filter(s => s.programado).sort((a, b) => b.realizado / b.programado - a.realizado / a.programado)[0];
+            document.getElementById('resumoGraficoMensal').innerHTML = `<span>Programado no mês: <strong>${totalProg}</strong></span><span>Realizado no mês: <strong>${totalReal}</strong></span><span>Aderência mensal: <strong>${aderenciaMes}%</strong></span>` + (melhor ? `<span>Melhor semana: <strong>${formatarData(melhor.inicio)} a ${formatarData(melhor.fim)} (${Math.round(melhor.realizado / melhor.programado * 100)}%)</strong></span>` : '');
         }
 
         function atualizarKpisManut(dados, atraso) {
